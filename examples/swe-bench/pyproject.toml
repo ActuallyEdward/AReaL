@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "areal-swe-bench-env"
+version = "0.1.0"
+description = "AReaL + mini-swe-agent workflow scaffold for generated SWE-bench Docker Compose tasks"
+requires-python = ">=3.10"
+dependencies = [
+  "datasets",
+  "jinja2",
+  "pydantic",
+  "transformers",
+]
+
+[tool.notes]
+mini_swe_agent_source = "/Users/edwardwang/Desktop/projects/datasets/mini-swe-agent/src"
+swebench_runtime_root = "/Users/edwardwang/Desktop/projects/datasets/swe-bench"
