@@ -52,6 +52,19 @@ def _sanitize_row_for_scheduler(row: dict[str, Any]) -> dict[str, Any]:
     return {key: _json_safe(value) for key, value in row.items()}
 
 
+class _JsonSafeDataset:
+    """Dataset wrapper that sanitizes examples at dataloader read time."""
+
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        return _sanitize_row_for_scheduler(self.dataset[index])
+
+
 def main(args):
     config, _ = load_expr_config(args, AgentRLConfig)
 
@@ -73,10 +86,7 @@ def main(args):
             )
         ],
     )
-    dataset = dataset.map(
-        _sanitize_row_for_scheduler,
-        desc="Sanitizing SWE-bench rows for scheduler",
-    )
+    dataset = _JsonSafeDataset(dataset)
 
     workflow_kwargs = dict(
         gconfig=config.gconfig,
