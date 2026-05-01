@@ -42,6 +42,8 @@ class MiniSweBenchAgent:
         eval_timeout: int = 1200,
         command_timeout: int = 60,
         cleanup: bool = True,
+        max_completion_tokens: int = 1024,
+        max_total_tokens: int | None = None,
     ):
         self.output_path = Path(output_path)
         self.max_iteration = max_iteration
@@ -50,6 +52,8 @@ class MiniSweBenchAgent:
         self.eval_timeout = eval_timeout
         self.command_timeout = command_timeout
         self.cleanup = cleanup
+        self.max_completion_tokens = max_completion_tokens
+        self.max_total_tokens = max_total_tokens
         assert self.executor is not None, "Executor must be provided to MiniSweBenchAgent"
 
     @session_context()
@@ -100,7 +104,12 @@ class MiniSweBenchAgent:
             client,
             observation_template=OBSERVATION_TEMPLATE,
             format_error_template=FORMAT_ERROR_TEMPLATE,
-            model_kwargs={"temperature": 0.0, "parallel_tool_calls": True},
+            model_kwargs={
+                "temperature": 0.0,
+                "parallel_tool_calls": True,
+                "max_completion_tokens": self.max_completion_tokens,
+                "max_total_tokens": self.max_total_tokens,
+            },
         )
         agent = DefaultAgent(
             model,

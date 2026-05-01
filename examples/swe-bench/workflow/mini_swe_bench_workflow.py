@@ -118,6 +118,8 @@ class MiniSweBenchWorkflow(RolloutWorkflow):
                     eval_timeout=self.eval_timeout,
                     command_timeout=self.command_timeout,
                     cleanup=self.cleanup,
+                    max_completion_tokens=self.gconfig.max_new_tokens,
+                    max_total_tokens=self.max_tokens,
                 ).run_agent(
                     data=data,
                     client=clients[i],
