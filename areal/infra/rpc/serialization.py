@@ -23,8 +23,6 @@ import subprocess
 import tempfile
 import zipfile
 from dataclasses import fields, is_dataclass
-from datetime import date, datetime
-from decimal import Decimal
 from typing import Any, Literal
 
 import numpy as np
@@ -580,23 +578,9 @@ def serialize_value(value: Any) -> Any:
     if value is None:
         return None
 
-    # Handle common scalar values that are not accepted by stdlib JSON.
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-
-    if isinstance(value, Decimal):
-        return float(value)
-
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-
     # Handle torch.Tensor
     if isinstance(value, torch.Tensor):
         return SerializedTensor.from_tensor(value).model_dump()
-
-    # Handle numpy scalar values.
-    if isinstance(value, np.generic):
-        return serialize_value(value.item())
 
     # Handle numpy.ndarray
     if isinstance(value, np.ndarray):
