@@ -50,17 +50,23 @@ class ArealMiniModel:
             )
         )
         raw_message = response.choices[0].message
-        message = raw_message.model_dump()
+        message = self._model_dump_json(raw_message)
         message["extra"] = {
             "actions": parse_toolcall_actions(
                 raw_message.tool_calls or [],
                 format_error_template=self.config.format_error_template,
             ),
-            "response": response.model_dump(),
+            "response": self._model_dump_json(response),
             "cost": 0.0,
             "timestamp": time.time(),
         }
         return message
+
+    def _model_dump_json(self, obj: Any) -> dict:
+        try:
+            return obj.model_dump(mode="json")
+        except TypeError:
+            return obj.model_dump()
 
     def _prepare_messages(self, messages: list[dict]) -> list[dict]:
         return [{k: v for k, v in message.items() if k != "extra"} for message in messages]

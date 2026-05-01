@@ -2,8 +2,12 @@ import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+import json
 import sys
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from agent_rl_config import AgentRLConfig
 from datasets import load_dataset
@@ -17,6 +21,35 @@ from areal.utils.stats_logger import StatsLogger
 
 
 WORKFLOW_PATH = "workflow.mini_swe_bench_workflow.MiniSweBenchWorkflow"
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if hasattr(value, "item"):
+        try:
+            return _json_safe(value.item())
+        except (TypeError, ValueError):
+            pass
+    try:
+        json.dumps(value)
+        return value
+    except TypeError:
+        return str(value)
+
+
+def _sanitize_row_for_scheduler(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: _json_safe(value) for key, value in row.items()}
 
 
 def main(args):
@@ -39,6 +72,10 @@ def main(args):
                 / config.train_dataset.path
             )
         ],
+    )
+    dataset = dataset.map(
+        _sanitize_row_for_scheduler,
+        desc="Sanitizing SWE-bench rows for scheduler",
     )
 
     workflow_kwargs = dict(
