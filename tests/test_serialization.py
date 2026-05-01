@@ -1,6 +1,9 @@
 """Tests for RPC serialization utilities."""
 
+import json
 from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal
 from io import BytesIO
 
 import numpy as np
@@ -39,6 +42,27 @@ class TestSerializationRoundTrip:
         serialized = serialize_value(payload)
         deserialized = deserialize_value(serialized)
         assert deserialized == payload
+
+    def test_json_incompatible_scalars(self):
+        """Datetime-like scalar values should be safe for stdlib JSON transport."""
+        payload = {
+            "created_at": datetime(2026, 5, 1, 21, 15, 13),
+            "day": date(2026, 5, 1),
+            "amount": Decimal("1.25"),
+            "raw": b"hello",
+            "nested": [{"np_scalar": np.int64(7)}],
+        }
+
+        serialized = serialize_value(payload)
+        json.dumps(serialized)
+
+        assert serialized == {
+            "created_at": "2026-05-01T21:15:13",
+            "day": "2026-05-01",
+            "amount": 1.25,
+            "raw": "hello",
+            "nested": [{"np_scalar": 7}],
+        }
 
     def test_tensors(self):
         """Test torch tensors including special dtypes."""
