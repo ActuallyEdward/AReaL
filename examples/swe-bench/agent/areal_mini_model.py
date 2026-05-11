@@ -31,24 +31,34 @@ class ArealMiniModel:
     """mini-swe-agent Model adapter backed by AReaL's OpenAI-compatible client.
 
     The mini agent is synchronous. Run it in a worker thread, like the Terminal-Bench
-    example does for blocking environment work. This adapter drives the async AReaL
-    client with `asyncio.run()` inside that worker thread.
+    example does for blocking environment work. This adapter submits async AReaL
+    client work back to the workflow event loop so loop-bound HTTP clients stay valid.
     """
 
-    def __init__(self, client, *, config_class: type = ArealMiniModelConfig, **kwargs):
+    def __init__(
+        self,
+        client,
+        *,
+        event_loop: asyncio.AbstractEventLoop,
+        config_class: type = ArealMiniModelConfig,
+        **kwargs,
+    ):
         self.client = client
+        self.event_loop = event_loop
         self.config = config_class(**kwargs)
 
     def query(self, messages: list[dict], **kwargs) -> dict:
         request_kwargs = self.config.model_kwargs | kwargs
-        response = asyncio.run(
+        future = asyncio.run_coroutine_threadsafe(
             self.client.chat.completions.create(
                 model=self.config.model_name,
                 messages=self._prepare_messages(messages),
                 tools=[BASH_TOOL],
                 **request_kwargs,
-            )
+            ),
+            self.event_loop,
         )
+        response = future.result()
         raw_message = response.choices[0].message
         message = self._model_dump_json(raw_message)
         message["extra"] = {

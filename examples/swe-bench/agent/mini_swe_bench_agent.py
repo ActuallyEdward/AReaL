@@ -68,10 +68,12 @@ class MiniSweBenchAgent:
 
         try:
             async with atrace_scope(f"mini_swebench:{instance_id}:run_agent"):
+                event_loop = asyncio.get_running_loop()
                 reward = await self._run_in_executor(
                     self._run_sync,
                     data,
                     client,
+                    event_loop,
                     instance_id,
                     traj_id,
                     timeout=self.eval_timeout + self.command_timeout * self.max_iteration,
@@ -90,7 +92,14 @@ class MiniSweBenchAgent:
             return await asyncio.wait_for(task, timeout=timeout)
         return await task
 
-    def _run_sync(self, data: dict, client, instance_id: str, traj_id: str) -> float:
+    def _run_sync(
+        self,
+        data: dict,
+        client,
+        event_loop: asyncio.AbstractEventLoop,
+        instance_id: str,
+        traj_id: str,
+    ) -> float:
         task_dir = self.swebench_root / "swe-bench-team-tasks" / instance_id
         env = SweBenchComposeEnvironment(
             task_dir=task_dir,
@@ -102,6 +111,7 @@ class MiniSweBenchAgent:
         traj_path = self.output_path / f"{instance_id}.{traj_id}.traj.json"
         model = ArealMiniModel(
             client,
+            event_loop=event_loop,
             observation_template=OBSERVATION_TEMPLATE,
             format_error_template=FORMAT_ERROR_TEMPLATE,
             model_kwargs={
