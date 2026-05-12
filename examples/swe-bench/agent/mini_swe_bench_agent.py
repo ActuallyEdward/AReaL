@@ -78,7 +78,15 @@ class MiniSweBenchAgent:
                     traj_id,
                     timeout=self.eval_timeout + self.command_timeout * self.max_iteration,
                 )
-            client.set_last_reward(reward)
+            try:
+                client.set_last_reward(reward)
+            except RuntimeError:
+                if reward != 0.0:
+                    raise
+                print(
+                    f"MiniSweBenchAgent zero-reward trajectory for {instance_id} "
+                    "has no cached model interaction to export."
+                )
             return reward
         except Exception as exc:
             print(f"MiniSweBenchAgent error for {instance_id}: {exc}")
@@ -133,13 +141,58 @@ class MiniSweBenchAgent:
         problem_statement = data.get("problem_statement") or data.get("instruction") or ""
         info = {"exit_status": "", "submission": ""}
         try:
-            info = agent.run(problem_statement)
-            eval_output = env.run_eval()
-            reward, metrics = self._score_eval(instance_id, traj_id, eval_output)
+            try:
+                info = agent.run(problem_statement)
+            except Exception as exc:
+                if not self._is_context_limit_error(exc):
+                    raise
+                reward = 0.0
+                info = {
+                    "exit_status": "ContextLimitExceeded",
+                    "submission": "",
+                    "error": str(exc),
+                }
+                eval_output = {
+                    "returncode": None,
+                    "output": f"Trajectory exceeded context limit before evaluation: {exc}",
+                }
+                metrics = {
+                    "swebench": {"reward": reward},
+                    "context_limit_exceeded": True,
+                    "error": str(exc),
+                }
+                print(
+                    f"MiniSweBenchAgent context limit for {instance_id} "
+                    f"trajectory {traj_id}; assigning reward 0.0."
+                )
+            else:
+                eval_output = env.run_eval()
+                reward, metrics = self._score_eval(instance_id, traj_id, eval_output)
             self._write_result(instance_id, traj_id, reward, info, eval_output, metrics)
             return reward
         finally:
             env.cleanup()
+
+    def _is_context_limit_error(self, exc: BaseException) -> bool:
+        messages = []
+        current: BaseException | None = exc
+        seen = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            messages.append(str(current).lower())
+            current = current.__cause__ or current.__context__
+        text = "\n".join(messages)
+        return any(
+            marker in text
+            for marker in (
+                "exceeds max_total_tokens",
+                "exceeds engine_max_tokens",
+                "max_new_tokens",
+                "non-positive",
+                "context length",
+                "sequence length",
+            )
+        )
 
     def _score_eval(self, instance_id: str, traj_id: str, eval_output: dict) -> tuple[float, dict]:
         result_dir = self.output_path / "eval_results" / instance_id / traj_id
