@@ -89,6 +89,20 @@ class MiniSweBenchAgent:
                 )
             return reward
         except Exception as exc:
+            if self._is_context_limit_error(exc):
+                reward = 0.0
+                print(
+                    f"MiniSweBenchAgent context limit for {instance_id} "
+                    f"trajectory {traj_id}; assigning reward 0.0."
+                )
+                try:
+                    client.set_last_reward(reward)
+                except RuntimeError:
+                    print(
+                        f"MiniSweBenchAgent zero-reward trajectory for {instance_id} "
+                        "has no cached model interaction to export."
+                    )
+                return reward
             print(f"MiniSweBenchAgent error for {instance_id}: {exc}")
             traceback.print_exc()
             return None
