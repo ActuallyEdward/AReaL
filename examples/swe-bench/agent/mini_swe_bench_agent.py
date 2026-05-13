@@ -217,8 +217,11 @@ class MiniSweBenchAgent:
 
         parser_script = self.swebench_root / "run_eval_with_metrics.py"
         if not parser_script.exists():
-            fallback = 1.0 if eval_output.get("returncode") == 0 else 0.0
-            return fallback, {"fallback": True, "returncode": eval_output.get("returncode")}
+            return 0.0, {
+                "fallback": True,
+                "error": f"missing parser script: {parser_script}",
+                "returncode": eval_output.get("returncode"),
+            }
 
         result = subprocess.run(
             [
@@ -239,8 +242,12 @@ class MiniSweBenchAgent:
         if metrics_path.exists():
             metrics = json.loads(metrics_path.read_text())
             return float(metrics.get("swebench", {}).get("reward", 0.0)), metrics
-        fallback = 1.0 if eval_output.get("returncode") == 0 else 0.0
-        return fallback, {"fallback": True, "parser_output": result.stdout}
+        return 0.0, {
+            "fallback": True,
+            "error": "parser did not produce metrics output",
+            "parser_output": result.stdout,
+            "returncode": eval_output.get("returncode"),
+        }
 
     def _write_result(
         self,
