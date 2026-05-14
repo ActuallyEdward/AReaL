@@ -20,5 +20,7 @@ Expected runtime assets:
 /Users/edwardwang/Desktop/projects/datasets/swe-bench/swe-bench-team-tasks/<instance_id>/
 ```
 
-The workflow optionally prebuilds the task image, runs `n_trajs` parallel rollouts, parses
-reward through the agent/eval layer, records rollout stats, and exports AReaL interactions.
+The workflow optionally prebuilds the task image, runs one rollout per workflow
+execution, parses reward through the agent/eval layer, records rollout stats, and
+exports AReaL interactions. GRPO grouping is handled by AReaL via
+`gconfig.n_samples`.

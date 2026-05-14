@@ -14,13 +14,11 @@ class TaskTimeouts:
 
 @dataclass
 class AgentRLConfig(GRPOConfig):
-    n_trajs: int = field(default=1)
     max_tokens_per_trajectory: int = field(default=32768)
     max_iteration: int = field(default=250)
     max_workers: int = field(default=25)
     async_training: bool = field(default=False)
     task_timeouts: TaskTimeouts = field(default_factory=TaskTimeouts)
-    filter_uniform_reward: bool = field(default=False)
 
     swebench_root: str = field(
         default="/Users/edwardwang/Desktop/projects/datasets/swe-bench"

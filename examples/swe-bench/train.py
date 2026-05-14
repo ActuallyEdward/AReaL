@@ -91,7 +91,6 @@ def main(args):
     workflow_kwargs = dict(
         gconfig=config.gconfig,
         tokenizer=tokenizer,
-        n_trajs=config.n_trajs,
         max_tokens=config.max_tokens_per_trajectory,
         dump_dir=os.path.join(
             StatsLogger.get_log_path(config.stats_logger), "generated"
@@ -102,7 +101,6 @@ def main(args):
         reset_env_timeout=config.task_timeouts._reset_env,
         eval_timeout=int(config.task_timeouts._evaluate_completion_sync),
         command_timeout=config.command_timeout,
-        filter_uniform_reward=config.filter_uniform_reward,
         cleanup=config.cleanup,
         prebuild_images=config.prebuild_images,
     )

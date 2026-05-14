@@ -6,11 +6,9 @@ total_train_epochs: 200
 tokenizer_path: ${actor.path}
 async_training: true
 
-n_trajs: 4
 max_tokens_per_trajectory: 40000
 max_iteration: 250
 max_workers: 25
-filter_uniform_reward: false
 
 swebench_root: /Users/edwardwang/Desktop/projects/datasets/swe-bench
 command_timeout: 60
@@ -54,9 +52,10 @@ rollout:
   check_trajectory_format: true
 
 gconfig:
-  n_samples: 1
+  n_samples: 4
   min_new_tokens: 0
   max_new_tokens: 1024
+  max_tokens: ${max_tokens_per_trajectory}
   greedy: false
   temperature: 1.0
 
