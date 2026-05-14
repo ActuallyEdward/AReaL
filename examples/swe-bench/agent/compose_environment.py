@@ -4,6 +4,7 @@ import json
 import os
 import platform
 import shlex
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -145,6 +146,24 @@ class SweBenchComposeEnvironment:
     def cleanup(self) -> None:
         if self.config.cleanup:
             self._run([str(self.task_dir / "docker_compose_stop.sh")], timeout=120)
+            self._cleanup_run_root()
+
+    def _cleanup_run_root(self) -> None:
+        run_root = self.run_root.resolve()
+        runs_root = (self.project_root / "runs").resolve()
+        instance_runs_root = (runs_root / self.instance_id).resolve()
+
+        try:
+            run_root.relative_to(instance_runs_root)
+        except ValueError:
+            print(f"Skipping SWE-bench run cleanup outside instance runs root: {run_root}")
+            return
+
+        if run_root in (runs_root, instance_runs_root):
+            print(f"Skipping unsafe SWE-bench run cleanup path: {run_root}")
+            return
+
+        shutil.rmtree(run_root, ignore_errors=True)
 
     def _check_finished(self, output: dict) -> None:
         lines = output.get("output", "").lstrip().splitlines(keepends=True)
