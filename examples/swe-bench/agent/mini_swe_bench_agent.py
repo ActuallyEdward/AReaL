@@ -171,7 +171,12 @@ class MiniSweBenchAgent:
                     "output": f"Trajectory exceeded context limit before evaluation: {exc}",
                 }
                 metrics = {
-                    "swebench": {"reward": reward},
+                    "swebench": {
+                        "reward": reward,
+                        "binary_reward": reward,
+                        "partial_reward": reward,
+                        "training_reward": reward,
+                    },
                     "context_limit_exceeded": True,
                     "error": str(exc),
                 }
@@ -241,13 +246,27 @@ class MiniSweBenchAgent:
         )
         if metrics_path.exists():
             metrics = json.loads(metrics_path.read_text())
-            return float(metrics.get("swebench", {}).get("reward", 0.0)), metrics
+            return self._reward_from_metrics(metrics), metrics
         return 0.0, {
             "fallback": True,
             "error": "parser did not produce metrics output",
             "parser_output": result.stdout,
             "returncode": eval_output.get("returncode"),
+            "swebench": {
+                "reward": 0.0,
+                "binary_reward": 0.0,
+                "partial_reward": 0.0,
+                "training_reward": 0.0,
+            },
         }
+
+    def _reward_from_metrics(self, metrics: dict) -> float:
+        swebench_metrics = metrics.setdefault("swebench", {})
+        binary_reward = float(swebench_metrics.get("reward", 0.0))
+        partial_reward = float(swebench_metrics.get("partial_reward", binary_reward))
+        swebench_metrics.setdefault("binary_reward", binary_reward)
+        swebench_metrics["training_reward"] = partial_reward
+        return partial_reward
 
     def _write_result(
         self,
@@ -259,10 +278,16 @@ class MiniSweBenchAgent:
         metrics: dict,
     ) -> None:
         result_path = self.output_path / f"{instance_id}.{traj_id}.result.json"
+        swebench_metrics = metrics.get("swebench", {})
+        binary_reward = float(swebench_metrics.get("binary_reward", reward))
+        partial_reward = float(swebench_metrics.get("partial_reward", reward))
         result = {
             "instance_id": instance_id,
             "traj_id": traj_id,
             "reward": reward,
+            "reward_type": "partial_reward",
+            "binary_reward": binary_reward,
+            "partial_reward": partial_reward,
             "agent_info": info,
             "eval": {
                 "returncode": eval_output.get("returncode"),
