@@ -256,8 +256,29 @@ class MiniSweBenchAgent:
             stderr=subprocess.STDOUT,
             check=False,
         )
+        print(
+            "[SWE DEBUG parser] "
+            f"instance={instance_id} traj={traj_id} "
+            f"eval_returncode={eval_output.get('returncode')} "
+            f"parser_returncode={result.returncode} "
+            f"metrics_exists={metrics_path.exists()} "
+            f"log_path={log_path} "
+            f"metrics_path={metrics_path} "
+            f"parser_output_tail={result.stdout[-500:] if result.stdout else ''!r}"
+        )
         if metrics_path.exists():
             metrics = json.loads(metrics_path.read_text())
+            swebench_metrics = metrics.get("swebench", {})
+            print(
+                "[SWE DEBUG parser metrics] "
+                f"instance={instance_id} traj={traj_id} "
+                f"markers_found={metrics.get('markers_found')} "
+                f"parsed_tests={metrics.get('parsed_tests')} "
+                f"partial={swebench_metrics.get('partial_reward')} "
+                f"binary={swebench_metrics.get('reward')} "
+                f"ftp={swebench_metrics.get('FAIL_TO_PASS')} "
+                f"ptp={swebench_metrics.get('PASS_TO_PASS')}"
+            )
             return self._reward_from_metrics(metrics), metrics
         return 0.0, {
             "fallback": True,
