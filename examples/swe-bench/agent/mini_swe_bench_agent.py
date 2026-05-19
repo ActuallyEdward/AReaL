@@ -187,6 +187,18 @@ class MiniSweBenchAgent:
             else:
                 eval_output = env.run_eval()
                 reward, metrics = self._score_eval(instance_id, traj_id, eval_output)
+                swebench_metrics = metrics.get("swebench", {})
+                print(
+                    "[SWE DEBUG score] "
+                    f"instance={instance_id} traj={traj_id} "
+                    f"returned_reward={reward} "
+                    f"binary={swebench_metrics.get('binary_reward')} "
+                    f"raw_binary={swebench_metrics.get('reward')} "
+                    f"partial={swebench_metrics.get('partial_reward')} "
+                    f"training={swebench_metrics.get('training_reward')} "
+                    f"ftp={swebench_metrics.get('FAIL_TO_PASS')} "
+                    f"ptp={swebench_metrics.get('PASS_TO_PASS')}"
+                )
             self._write_result(instance_id, traj_id, reward, info, eval_output, metrics)
             return reward
         finally:

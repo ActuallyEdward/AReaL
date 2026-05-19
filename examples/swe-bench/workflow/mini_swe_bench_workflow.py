@@ -123,6 +123,11 @@ class MiniSweBenchWorkflow(RolloutWorkflow):
         stats_tracker.get(self.rollout_stat_scope).scalar(reward=reward)
         client.apply_reward_discount(turn_discount=0.9)
         completions_with_reward = client.export_interactions(style="individual")
+        print(
+            "[SWE DEBUG export] "
+            f"instance={instance_id} returned_reward={reward} "
+            f"exported_rewards={[float(x.reward or 0.0) for x in completions_with_reward.values()]}"
+        )
 
         if len(completions_with_reward) == 0:
             print(f"Task {instance_id} produced no exportable interactions.")
