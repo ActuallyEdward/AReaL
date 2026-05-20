@@ -195,6 +195,7 @@ class MiniSweBenchAgent:
                     f"binary={swebench_metrics.get('binary_reward')} "
                     f"raw_binary={swebench_metrics.get('reward')} "
                     f"partial={swebench_metrics.get('partial_reward')} "
+                    f"shaped={swebench_metrics.get('shaped_partial_reward')} "
                     f"training={swebench_metrics.get('training_reward')} "
                     f"ftp={swebench_metrics.get('FAIL_TO_PASS')} "
                     f"ptp={swebench_metrics.get('PASS_TO_PASS')}"
@@ -296,10 +297,34 @@ class MiniSweBenchAgent:
     def _reward_from_metrics(self, metrics: dict) -> float:
         swebench_metrics = metrics.setdefault("swebench", {})
         binary_reward = float(swebench_metrics.get("reward", 0.0))
-        partial_reward = float(swebench_metrics.get("partial_reward", binary_reward))
+        raw_partial_reward = float(swebench_metrics.get("partial_reward", binary_reward))
+        shaped_partial_reward = self._shaped_partial_reward(swebench_metrics, raw_partial_reward)
         swebench_metrics.setdefault("binary_reward", binary_reward)
-        swebench_metrics["training_reward"] = partial_reward
-        return partial_reward
+        swebench_metrics["raw_partial_reward"] = raw_partial_reward
+        swebench_metrics["shaped_partial_reward"] = shaped_partial_reward
+        swebench_metrics["training_reward"] = shaped_partial_reward
+        return shaped_partial_reward
+
+    def _shaped_partial_reward(self, swebench_metrics: dict, fallback: float) -> float:
+        fail_to_pass = swebench_metrics.get("FAIL_TO_PASS")
+        pass_to_pass = swebench_metrics.get("PASS_TO_PASS")
+        if not isinstance(fail_to_pass, dict) or not isinstance(pass_to_pass, dict):
+            return fallback
+
+        fail_to_pass_ratio = self._pass_ratio(fail_to_pass)
+        pass_to_pass_ratio = self._pass_ratio(pass_to_pass)
+        if fail_to_pass_ratio is None or pass_to_pass_ratio is None:
+            return fallback
+        return 0.8 * fail_to_pass_ratio + 0.2 * pass_to_pass_ratio
+
+    @staticmethod
+    def _pass_ratio(report: dict) -> float | None:
+        if "pass_ratio" in report:
+            return float(report["pass_ratio"])
+        total = int(report.get("total", 0))
+        if total <= 0:
+            return None
+        return float(report.get("passed", 0)) / total
 
     def _write_result(
         self,
@@ -314,13 +339,17 @@ class MiniSweBenchAgent:
         swebench_metrics = metrics.get("swebench", {})
         binary_reward = float(swebench_metrics.get("binary_reward", reward))
         partial_reward = float(swebench_metrics.get("partial_reward", reward))
+        raw_partial_reward = float(swebench_metrics.get("raw_partial_reward", partial_reward))
+        shaped_partial_reward = float(swebench_metrics.get("shaped_partial_reward", reward))
         result = {
             "instance_id": instance_id,
             "traj_id": traj_id,
             "reward": reward,
-            "reward_type": "partial_reward",
+            "reward_type": "shaped_partial_reward",
             "binary_reward": binary_reward,
             "partial_reward": partial_reward,
+            "raw_partial_reward": raw_partial_reward,
+            "shaped_partial_reward": shaped_partial_reward,
             "agent_info": info,
             "eval": {
                 "returncode": eval_output.get("returncode"),
