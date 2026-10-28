@@ -12,7 +12,7 @@ import re
 import struct
 from collections.abc import Callable, Iterator
 from concurrent.futures import Future
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -77,6 +77,10 @@ from areal.engine.core.model import (
     requires_padded_seq,
     resolve_sequence_packing_mode,
     validate_model_packed_seq_dependencies,
+)
+from areal.engine.megatron_utils.activation_storage import (
+    install_activation_storage_tracking,
+    track_activation_storage,
 )
 from areal.engine.megatron_utils.bailing_v3 import (
     BailingV3MlaWeightPairs,
@@ -1344,7 +1348,7 @@ class MegatronEngine(TrainEngine):
             # coalesced all-gather transient.
             self._weight_residency.release_grad_memory()
             gc.collect()
-            torch.cuda.empty_cache()
+            current_platform.clear_memory()
         with self._checkpoint_aware_context(
             with_model=True, with_optimizer=meta.with_optim
         ):
@@ -2074,30 +2078,26 @@ class MegatronEngine(TrainEngine):
                 and self.sequence_packing_mode == SequencePackingMode.WRAPPER_THD
                 and self.hf_config.architectures == ["Qwen4ExpForConditionalGeneration"]
             )
-            qwen35_text_thd = (
-                self.use_model_packed_seq
-                and is_qwen3_5_model(self.hf_config.model_type)
-                and not has_vision_inputs
+            qwen35_model_thd = self.use_model_packed_seq and is_qwen3_5_model(
+                self.hf_config.model_type
             )
-            # Qwen4Exp's wrapper retains the visual embedding forward while
-            # bypassing only the inner language model's final projection. Its
-            # mRoPE and token masks are prepared before the shared THD/CP split.
+            # Both wrappers retain visual embedding/fusion and mRoPE before
+            # their THD/CP split. Hidden-state mode bypasses only the inner
+            # language model's final projection, so image/video inputs do not
+            # change the chunked LM Head's hidden-state or label contract.
             if (
                 use_chunked_lm_head
-                and not qwen4_wrapper_thd
+                and not (qwen4_wrapper_thd or qwen35_model_thd)
                 and (
                     has_vision_inputs
-                    or (
-                        self.is_vision_model
-                        and not self.use_padded_seq
-                        and not qwen35_text_thd
-                    )
+                    or (self.is_vision_model and not self.use_padded_seq)
                 )
             ):
                 raise NotImplementedError(
-                    "chunked LM Head vision inputs require the Qwen4Exp "
-                    "mcore-bridge WRAPPER_THD path; text-only Qwen3.5 supports "
-                    "padded BSHD and model-owned THD"
+                    "chunked LM Head vision inputs require Qwen3.5 "
+                    "megatron-bridge model-owned THD or Qwen4Exp "
+                    "mcore-bridge wrapper-owned THD; text-only Qwen3.5 "
+                    "also supports padded BSHD"
                 )
 
             # MTP training: pass the token loss mask through the model's actual
@@ -2395,11 +2395,39 @@ class MegatronEngine(TrainEngine):
                     total_token_count=total_token_count,
                 )
 
-            self.forward_backward_batch(
-                mb_list,
-                process_output,
-                forward_only=False,
-            )
+            activation_context = nullcontext()
+            if self._weight_residency is not None:
+                install_activation_storage_tracking()
+                model_chunks = (
+                    self.model
+                    if isinstance(self.model, (list, tuple))
+                    else [self.model]
+                )
+                protected_tensors = [
+                    tensor
+                    for model_chunk in model_chunks
+                    # Megatron DDP shadows nn.Module.buffers with its grad buffers.
+                    for tensor in (
+                        *model_chunk.parameters(),
+                        *torch.nn.Module.buffers(model_chunk),
+                    )
+                ]
+                activation_context = track_activation_storage(protected_tensors)
+            with activation_context as activation_tracker:
+                self.forward_backward_batch(
+                    mb_list,
+                    process_output,
+                    forward_only=False,
+                )
+
+            if activation_tracker is not None:
+                released_storages, released_bytes = activation_tracker.release()
+                if released_storages:
+                    self.logger.debug(
+                        "Released %d retained Megatron/TE activation storages (%.3f GiB)",
+                        released_storages,
+                        released_bytes / 1024**3,
+                    )
 
             # Step 4: Optimizer step
             stats = self.optimizer_step()
